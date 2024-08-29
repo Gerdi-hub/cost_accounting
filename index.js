@@ -1,77 +1,133 @@
-(function () {
-    var DELIMITER = ';';
-    var NEWLINE = '\n';
-    var qRegex = /^"|"$/g;
-    var i = document.getElementById('file');
-    var tableHtml = document.getElementById('table');
-    var keepableIndexes = ['Kuupäev', 'Saaja/maksja nimi',]
+const DELIMITER = ';';
+const NEWLINE = '\n';
+const qRegex = /^"|"$/g;
+const inputFile = document.getElementById('file');
+const tableHtml = document.getElementById('table');
+let bank = inputFile.addEventListener('click', function () {
+    bank = document.querySelector('#pank').value;
+})
+const columnMapping = {
+    date: "Kuupäev",
+    sum: "Summa",
+    explanation: "Selgitus"
+};
 
-    if (!i) {
+function findColumnIndex(headerRow, columnName) {
+    return headerRow.indexOf(columnName);
+}
+
+function cleanCreditPayments(table, bank) {
+    if (bank == "seb") {
+        let cleanedTable = table.filter(row => row[6] !== 'C');
+        return cleanedTable;
+    }
+    else if (bank == "swedbank") {
+        let cleanedTable = table.filter(row => row[7] !== 'K' && !row[4].startsWith('Ülekanne Rahakogujasse'));
+        return cleanedTable;
+    }
+}
+
+function onlyKeepColumns(rawTable, columnMapping) {
+    const headerRow = rawTable[0]; // Assuming the first row is the header
+    const newTable = [];
+
+    // Find indexes of the relevant columns
+    const dateIndex = findColumnIndex(headerRow, columnMapping.date);
+    const sumIndex = findColumnIndex(headerRow, columnMapping.sum);
+    const explanationIndex = findColumnIndex(headerRow, columnMapping.explanation);
+
+    // Create new header row
+    newTable.push(["date", "sum", "explanation"]);
+
+    // Remap each row
+    for (let i = 1; i < rawTable.length; i++) {
+        const row = rawTable[i];
+        newTable.push([
+            row[dateIndex],
+            row[sumIndex],
+            row[explanationIndex]
+        ]);
+    }
+    console.log(newTable);
+
+    return newTable;
+}
+
+function cleanTable(table) {
+    table = cleanCreditPayments(table, bank);
+    table = onlyKeepColumns(table, columnMapping);
+
+    return table;
+}
+
+function cleanParens(row) {
+
+    let cleanedRow = [];
+    row.forEach(function (element) {
+        let cleanedElem = element.replace(qRegex, '');
+        cleanedRow.push(cleanedElem);
+    })
+    return cleanedRow;
+}
+
+function toTable(text) {
+    if (!text) {
         return;
     }
 
-    i.addEventListener('change', function () {
-        if (!!i.files && i.files.length > 0) {
-            parseCSV(i.files[0]);
+    let lines = text.split(NEWLINE);
+    let rows = [];
+
+    lines.forEach(function (line) {
+        let row = line.split(DELIMITER);
+
+        rows.push(cleanParens(row));
+    })
+
+    return rows;
+}
+
+function parseCSV(file) {
+    if (!file || !FileReader) {
+        return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+        let table = toTable(e.target.result);
+        table = cleanTable(table);
+        renderTable(table);
+    };
+
+    reader.readAsText(file);
+}
+
+function getFail() {
+    if (!inputFile) {
+        return;
+    }
+
+    inputFile.addEventListener('change', function () {
+        if (!!inputFile.files && inputFile.files.length > 0) {
+            return parseCSV(inputFile.files[0]);
         }
     });
+}
 
-    function parseCSV(file) {
-        if (!file || !FileReader) {
-            return;
-        }
+function renderTable(tableData) {
+    const table = document.getElementById('data-table');
+    table.innerHTML = ''; // Clear any existing content
 
-        var reader = new FileReader();
+    tableData.forEach(row => {
+        const tr = document.createElement('tr');
+        row.forEach(cell => {
+            const td = document.createElement('td');
+            td.textContent = cell;
+            tr.appendChild(td);
+        });
+        table.appendChild(tr);
+    });
+}
 
-        reader.onload = function (e) {
-            let table = toTable(e.target.result);
-            onlyKeepColumns(['Dokumendi number', 'Saaja/maksja konto'], table);
-        };
-
-        reader.readAsText(file);
-    }
-    
-
-    function onlyKeepColumns(columnNames, oldTable) {
-        let cleanedTable = [];
-        let headers = oldTable[0];
-        keepableIndexes = [];
-        for (let i = 0; i <= headers.length; i++) {
-            if (columnNames.includes(headers[i])) {
-                keepableIndexes.push(i);
-            }
-        }
-        console.log(keepableIndexes);
-        // tegelt paneme meetodi tagastama uut tabelit, hetkel POC
-    }
-
-
-    function toTable(text) {
-        if (!text) {
-            return;
-        }
-
-
-        let lines = text.split(NEWLINE);
-        let rows = [];
-        function cleanParens(row) {
-            let cleanedRow = [];
-            row.forEach(function(element){
-                let cleanedElem = element.replace(qRegex, '');
-                cleanedRow.push(cleanedElem);
-            })
-            return cleanedRow;
-        }
-
-        lines.forEach(function (line) {
-            let row = line.split(DELIMITER);
-
-            rows.push(cleanParens(row));
-        })
-        rows.forEach(function (row) {
-            console.log(row)
-        })
-
-        return rows;
-    }
-})();
+getFail();
