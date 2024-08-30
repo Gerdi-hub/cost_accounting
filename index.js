@@ -6,10 +6,15 @@ const tableHtml = document.getElementById('table');
 let bank = inputFile.addEventListener('click', function () {
     bank = document.querySelector('#pank').value;
 })
-const columnMapping = {
+const finalColumnMapping = {
     date: "Kuupäev",
     sum: "Summa",
     explanation: "Selgitus"
+};
+
+const explanationColumnMapping = {
+    explanation: "",
+    reciever: ""
 };
 
 function findColumnIndex(headerRow, columnName) {
@@ -19,12 +24,41 @@ function findColumnIndex(headerRow, columnName) {
 function cleanCreditPayments(table, bank) {
     if (bank == "seb") {
         let cleanedTable = table.filter(row => row[6] !== 'C');
+
         return cleanedTable;
     }
     else if (bank == "swedbank") {
         let cleanedTable = table.filter(row => row[7] !== 'K' && !row[4].startsWith('Ülekanne Rahakogujasse'));
         return cleanedTable;
     }
+}
+
+function mapExplanationIndexes(headers) {
+    for (let i = 1; i < headers.length; i++) {
+        if (headers[i].toUpperCase().startsWith('SAAJA/MAKSJA')) { explanationColumnMapping.reciever = i }
+        if (headers[i].toUpperCase().startsWith('SELGITUS')) { explanationColumnMapping.explanation = i }
+    }
+}
+
+function improveExplanation(table) {
+    mapExplanationIndexes(table[0]);
+    let expIndex = explanationColumnMapping.explanation;
+    let recIndex = explanationColumnMapping.reciever;
+
+    for (let i = 1; i < table.length; i++) {
+        let row = table[i];
+        let rec = row[recIndex] ? row[recIndex].trim() : "";
+        let expl = row[expIndex] ? row[expIndex].trim().replace(' kaart...', '').replace(/^[0-9'\* :\/.]+/, '') : 'KAALIKAS';
+
+        row[expIndex] = expl;
+
+        if (expl === "" || !expl.substring(0, 10).includes(rec.substring(0, 10))) {
+            row[expIndex] = row[expIndex] + " " + rec;
+        }
+    };
+
+    return table;
+
 }
 
 function onlyKeepColumns(rawTable, columnMapping) {
@@ -54,8 +88,11 @@ function onlyKeepColumns(rawTable, columnMapping) {
 }
 
 function cleanTable(table) {
+
+
     table = cleanCreditPayments(table, bank);
-    table = onlyKeepColumns(table, columnMapping);
+    table = improveExplanation(table);
+    table = onlyKeepColumns(table, finalColumnMapping);
 
     return table;
 }
